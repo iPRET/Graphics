@@ -268,29 +268,117 @@ def load_pic(path):
   
   
 from PIL import Image, ImageDraw, ImageFont
+from collections import OrderedDict
 
-def gen_text(text,
-             font_path = "fonts/Atkinson.ttf",
-             font_size = 16) -> np.ndarray:
+_max_fonts = 128
+_font_cache = OrderedDict()
+
+_alphabet = (
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  "ĀāČčĒēĢģ"
+  "ĪīĶķĻļŅ"
+  "ŠšŪūŽž"
+)
+
+
+def _measure_height(font):
+  img = Image.new("L", (1, 1), 0)
+  d = ImageDraw.Draw(img)
+  box = d.textbbox((0, 0), _alphabet, font=font)
+  return box[3] - box[1]
+
+
+def _find_point_size(path, height):
+  lo = 1
+  hi = height * 4
+  best = lo
+  while lo <= hi:
+    mid = (lo + hi) // 2
+    f = ImageFont.truetype(path, mid)
+    h = _measure_height(f)
+    if h <= height:
+      best = mid
+      lo = mid + 1
+    else:
+      hi = mid - 1
+  return ImageFont.truetype(path, best)
+
+
+def _get_font(name, height):
+  key = (name, height)
+  if key in _font_cache:
+    _font_cache.move_to_end(key)
+    return _font_cache[key]
+
+  path = f"fonts/{name}.ttf"
+  font = _find_point_size(path, height)
+
+  if len(_font_cache) >= _max_fonts:
+    _font_cache.popitem(last=False)
+
+  _font_cache[key] = font
+  return font
+
+
+def _text(text, font="Atkinson", height=16):
   """Generate a greyscale text bitmap.
 
   :param str text: Text to render.
-  :param font_path: Path to a TTF font file.
-  :param int font_size: Pixel height of the font.
-  :returns: ``numpy.ndarray`` in shape ``(x, y)`` with values 0-255.
+  :param str font: Font name inside the ``fonts`` folder without extension.
+  :param int height: Desired character height in pixels.
+  :returns: ``numpy.ndarray`` with shape ``(x, y)`` and values 0-255.
   """
 
-  font = ImageFont.truetype(str(font_path), font_size)
+  font_obj = _get_font(font, height)
 
-  # First pass—get bounding box
   dummy = Image.new("L", (1, 1), 0)
-  w, h = ImageDraw.Draw(dummy).textbbox((0, 0), text, font=font)[2:]
+  w, h = ImageDraw.Draw(dummy).textbbox((0, 0), text, font=font_obj)[2:]
 
-  # Second pass—actually draw
-  img = Image.new("L", (w, h), 0)  # 'L' = 8-bit greyscale
+  img = Image.new("L", (w, h), 0)
   draw = ImageDraw.Draw(img)
-  draw.text((0, 0), text, fill=255, font=font)
+  draw.text((0, 0), text, fill=255, font=font_obj)
 
   arr = np.asarray(img).swapaxes(0, 1)
-
   return arr
+
+
+def text(p, c, text, font="Atkinson", height=16):
+  """Draw text onto the buffer.
+
+  :param p: Top-left position on screen.
+  :param c: Color ``(r, g, b)``.
+  :param str text: Text to draw.
+  :param str font: Font name inside the ``fonts`` folder without extension.
+  :param int height: Desired character height in pixels.
+  """
+
+  mask = _text(text, font, height)
+  p = _intpoint(p)
+
+  p2 = [p[0] + mask.shape[0] - 1, p[1] + mask.shape[1] - 1]
+  if p2[0] < 0 or p2[1] < 0 or p[0] > maxx or p[1] > maxy:
+    return
+
+  src = [0, 0]
+  if p[0] < 0:
+    src[0] = -p[0]
+    p[0] = 0
+  if p[1] < 0:
+    src[1] = -p[1]
+    p[1] = 0
+  if p2[0] > maxx:
+    mask = mask[:mask.shape[0] - (p2[0] - maxx), :]
+    p2[0] = maxx
+  if p2[1] > maxy:
+    mask = mask[:, :mask.shape[1] - (p2[1] - maxy)]
+    p2[1] = maxy
+
+  mask = mask[src[0]:, src[1]:]
+
+  region = buffer[p[0]:p2[0] + 1, p[1]:p2[1] + 1]
+  alpha = mask.astype(np.uint16)
+  inv_alpha = 255 - alpha
+  color_arr = np.array(c, dtype=np.uint16)
+
+  region[:] = ((region.astype(np.uint16) * inv_alpha[..., None] +
+               color_arr * alpha[..., None]) // 255).astype(np.uint8)
