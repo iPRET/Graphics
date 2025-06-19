@@ -270,41 +270,44 @@ def load_pic(path):
 from PIL import Image, ImageDraw, ImageFont
 from collections import OrderedDict
 
+
 _max_fonts = 128
 _font_cache = OrderedDict()
 
 _alphabet = (
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-  "ĀāČčĒēĢģ"
-  "ĪīĶķĻļŅ"
-  "ŠšŪūŽž"
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĀāČčĒēĢģĪīĶķĻļŅŠšŪūŽž"
 )
 
-
 def _measure_height(font):
-  img = Image.new("L", (1, 1), 0)
-  d = ImageDraw.Draw(img)
-  box = d.textbbox((0, 0), _alphabet, font=font)
-  return box[3] - box[1]
+  """Measures height of an ImageFont.truetype font for our _alphabet."""
+  dummy = Image.new("L", (1, 1), 0)
+  w, h = ImageDraw.Draw(dummy).textbbox((0, 0), _alphabet, font=font)[2:]
+
+  img = Image.new("L", (w, h), 0)
+  draw = ImageDraw.Draw(img)
+  draw.text((0, 0), _alphabet, fill=255, font=font)
+  return np.array(img).shape[0]
 
 
 def _find_point_size(path, height):
-  lo = 1
-  hi = height * 4
-  best = lo
-  while lo <= hi:
-    mid = (lo + hi) // 2
+  """Given a font path, finds a point size that achieves the text height we desire for our _alphabet."""
+  st = 1
+  nd = height * 4
+  for i in range(20):
+    mid = (st + nd) / 2
     f = ImageFont.truetype(path, mid)
-    h = _measure_height(f)
-    if h <= height:
-      best = mid
-      lo = mid + 1
+    tmp = _measure_height(f)
+    if tmp < height:
+      st = mid
+    elif tmp > height:
+      nd = mid
     else:
-      hi = mid - 1
-  return ImageFont.truetype(path, best)
+      return ImageFont.truetype(path, mid)
+  return ImageFont.truetype(path, (lo + hi) / 2)
 
 
 def _get_font(name, height):
+  """Cache wrapper for getting a font that generates text of the height we desire."""
   key = (name, height)
   if key in _font_cache:
     _font_cache.move_to_end(key)
@@ -334,7 +337,7 @@ def _text(text, font="Atkinson", height=16):
   dummy = Image.new("L", (1, 1), 0)
   w, h = ImageDraw.Draw(dummy).textbbox((0, 0), text, font=font_obj)[2:]
 
-  img = Image.new("L", (w, h), 0)
+  img = Image.new("L", (w, height), 0)
   draw = ImageDraw.Draw(img)
   draw.text((0, 0), text, fill=255, font=font_obj)
 
