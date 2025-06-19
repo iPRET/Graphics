@@ -156,7 +156,7 @@ def line(p1, p2, c = [255, 255, 255]):
     deltay = p2[1] - p1[1]
     t = -p1[1] / deltay
     deltax = p2[0] - p1[0]
-    p1 = [p1[0] + deltax, 0]
+    p1 = [p1[0] + deltax * t, 0]
   
   if p2[1] > maxy:
     deltay = p2[1] - p1[1]
