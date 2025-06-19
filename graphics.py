@@ -45,6 +45,12 @@ def _setup_screen_size_constants(w, h):
 
 
 def open(width = 512, height = 512, name = "Graphics"):
+  """Open a new graphics window.
+
+  :param int width: Width of the window in pixels.
+  :param int height: Height of the window in pixels.
+  :param str name: Title for the window.
+  """
   global on
   
   if on:
@@ -63,12 +69,14 @@ def open(width = 512, height = 512, name = "Graphics"):
   
   
 def close():
+  """Close the graphics window."""
   global on
   p.quit()
   on = False
   
   
 def draw():
+  """Render the internal buffer to the screen."""
   surf = p.image.frombuffer(buffer.swapaxes(0, 1).copy(order="C"), (width, height), "RGB")
   screen.blit(surf, (0, 0))
   p.display.flip()
@@ -83,6 +91,11 @@ def _inrange(x, mn, mx):
   
   
 def putpixel(p, c = [255, 255, 255]):
+  """Draw a single pixel.
+
+  :param p: Position ``(x, y)`` of the pixel.
+  :param c: Color ``(r, g, b)`` as integers 0-255.
+  """
   p = _intpoint(p)
   if _inrange(p[0], 0, maxx) and _inrange(p[1], 0, maxy):
     buffer[p[0], p[1]] = c
@@ -116,6 +129,12 @@ def rect(p1, p2, c = [255, 255, 255]):
   
 
 def line(p1, p2, c = [255, 255, 255]):
+  """Draw a straight line between two points.
+
+  :param p1: Starting position ``(x, y)``.
+  :param p2: Ending position ``(x, y)``.
+  :param c: Color ``(r, g, b)``.
+  """
   #Shorten line by x.
   ##Reorder points to go leftward.
   if p2[0] > p1[0]:
@@ -197,6 +216,13 @@ def line(p1, p2, c = [255, 255, 255]):
   
   
 def draw_np(p, pic):
+  """Blit a numpy image onto the buffer.
+
+  ``pic`` must be shaped ``(x, y, 3)`` and hold uint8 data.
+
+  :param p: Top-left corner on screen.
+  :param pic: Image data to draw.
+  """
   p = _intpoint(p)
   p2 = [p[0] + pic.shape[0] - 1, p[1] + pic.shape[1] - 1]
   if p2[0] < 0:
@@ -228,8 +254,13 @@ def draw_np(p, pic):
   
   
 from PIL import Image
-  
+
 def load_pic(path):
+  """Load an image file.
+
+  :param str path: Path to the image on disk.
+  :returns: Array of shape ``(x, y, 3)`` in RGB order.
+  """
   img = Image.open(path).convert("RGB")
   arr_yx = np.asarray(img, dtype=np.uint8)
   arr_xy = np.transpose(arr_yx, (1, 0, 2))   # now shape is (x, y, 3)
@@ -237,22 +268,29 @@ def load_pic(path):
   
   
 from PIL import Image, ImageDraw, ImageFont
-  
+
 def gen_text(text,
              font_path = "fonts/Atkinson.ttf",
              font_size = 16) -> np.ndarray:
-    
-    font = ImageFont.truetype(str(font_path), font_size)
+  """Generate a greyscale text bitmap.
 
-    # First pass—get bounding box
-    dummy = Image.new("L", (1, 1), 0)
-    w, h = ImageDraw.Draw(dummy).textbbox((0, 0), text, font=font)[2:]
+  :param str text: Text to render.
+  :param font_path: Path to a TTF font file.
+  :param int font_size: Pixel height of the font.
+  :returns: ``numpy.ndarray`` in shape ``(x, y)`` with values 0-255.
+  """
 
-    # Second pass—actually draw
-    img = Image.new("L", (w, h), 0)  # 'L' = 8-bit greyscale
-    draw = ImageDraw.Draw(img)
-    draw.text((0, 0), text, fill=255, font=font)
+  font = ImageFont.truetype(str(font_path), font_size)
 
-    arr = np.asarray(img).swapaxes(0, 1)
+  # First pass—get bounding box
+  dummy = Image.new("L", (1, 1), 0)
+  w, h = ImageDraw.Draw(dummy).textbbox((0, 0), text, font=font)[2:]
 
-    return arr
+  # Second pass—actually draw
+  img = Image.new("L", (w, h), 0)  # 'L' = 8-bit greyscale
+  draw = ImageDraw.Draw(img)
+  draw.text((0, 0), text, fill=255, font=font)
+
+  arr = np.asarray(img).swapaxes(0, 1)
+
+  return arr
